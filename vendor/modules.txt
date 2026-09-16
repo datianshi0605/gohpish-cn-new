@@ -1,0 +1,106 @@
+# bitbucket.org/liamstask/goose v0.0.0-20150115234039-8488cc47d90c
+bitbucket.org/liamstask/goose/lib/goose
+# github.com/NYTimes/gziphandler v1.1.1
+github.com/NYTimes/gziphandler
+# github.com/PuerkitoBio/goquery v1.5.0
+github.com/PuerkitoBio/goquery
+# github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
+github.com/alecthomas/template
+github.com/alecthomas/template/parse
+# github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d
+github.com/alecthomas/units
+# github.com/andybalholm/cascadia v1.0.0
+github.com/andybalholm/cascadia
+# github.com/emersion/go-imap v1.0.4
+github.com/emersion/go-imap
+github.com/emersion/go-imap/client
+github.com/emersion/go-imap/commands
+github.com/emersion/go-imap/responses
+github.com/emersion/go-imap/utf7
+# github.com/emersion/go-message v0.12.0
+github.com/emersion/go-message
+github.com/emersion/go-message/charset
+github.com/emersion/go-message/textproto
+# github.com/emersion/go-sasl v0.0.0-20191210011802-430746ea8b9b
+github.com/emersion/go-sasl
+# github.com/emersion/go-textwrapper v0.0.0-20160606182133-d0e65e56babe
+github.com/emersion/go-textwrapper
+# github.com/go-sql-driver/mysql v1.5.0
+github.com/go-sql-driver/mysql
+# github.com/gophish/gomail v0.0.0-20200818021916-1f6d0dfd512e
+github.com/gophish/gomail
+# github.com/gorilla/context v1.1.1
+github.com/gorilla/context
+# github.com/gorilla/csrf v1.6.2
+github.com/gorilla/csrf
+# github.com/gorilla/handlers v1.4.2
+github.com/gorilla/handlers
+# github.com/gorilla/mux v1.7.3
+github.com/gorilla/mux
+# github.com/gorilla/securecookie v1.1.1
+github.com/gorilla/securecookie
+# github.com/gorilla/sessions v1.2.0
+github.com/gorilla/sessions
+# github.com/jinzhu/gorm v1.9.12
+github.com/jinzhu/gorm
+# github.com/jinzhu/inflection v1.0.0
+github.com/jinzhu/inflection
+# github.com/jordan-wright/email v4.0.1-0.20200824153738-3f5bafa1cd84+incompatible
+github.com/jordan-wright/email
+# github.com/jordan-wright/unindexed v0.0.0-20181209214434-78fa79113c0f
+github.com/jordan-wright/unindexed
+# github.com/konsorten/go-windows-terminal-sequences v1.0.1
+github.com/konsorten/go-windows-terminal-sequences
+# github.com/kylelemons/go-gypsy v0.0.0-20160905020020-08cad365cd28
+github.com/kylelemons/go-gypsy/yaml
+# github.com/lib/pq v1.1.1
+github.com/lib/pq
+github.com/lib/pq/oid
+github.com/lib/pq/scram
+# github.com/mattn/go-sqlite3 v2.0.3+incompatible
+github.com/mattn/go-sqlite3
+# github.com/oschwald/maxminddb-golang v1.6.0
+github.com/oschwald/maxminddb-golang
+# github.com/pkg/errors v0.8.0
+github.com/pkg/errors
+# github.com/sirupsen/logrus v1.4.2
+github.com/sirupsen/logrus
+# github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
+github.com/skip2/go-qrcode
+github.com/skip2/go-qrcode/bitset
+github.com/skip2/go-qrcode/reedsolomon
+# github.com/ziutek/mymysql v1.5.4
+github.com/ziutek/mymysql/godrv
+github.com/ziutek/mymysql/mysql
+github.com/ziutek/mymysql/native
+# golang.org/x/crypto v0.0.0-20200128174031-69ecbb4d6d5d
+golang.org/x/crypto/bcrypt
+golang.org/x/crypto/blowfish
+# golang.org/x/net v0.0.0-20190404232315-eb5bcb51f2a3
+golang.org/x/net/html
+golang.org/x/net/html/atom
+# golang.org/x/sys v0.0.0-20191224085550-c709ea063b76
+golang.org/x/sys/unix
+golang.org/x/sys/windows
+# golang.org/x/text v0.3.2
+golang.org/x/text/encoding
+golang.org/x/text/encoding/charmap
+golang.org/x/text/encoding/ianaindex
+golang.org/x/text/encoding/internal
+golang.org/x/text/encoding/internal/identifier
+golang.org/x/text/encoding/japanese
+golang.org/x/text/encoding/korean
+golang.org/x/text/encoding/simplifiedchinese
+golang.org/x/text/encoding/traditionalchinese
+golang.org/x/text/encoding/unicode
+golang.org/x/text/internal/utf8internal
+golang.org/x/text/runes
+golang.org/x/text/transform
+# golang.org/x/time v0.0.0-20200416051211-89c76fbcd5d1
+golang.org/x/time/rate
+# gopkg.in/alecthomas/kingpin.v2 v2.2.6
+gopkg.in/alecthomas/kingpin.v2
+# gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc
+gopkg.in/alexcesaro/quotedprintable.v3
+# gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405
+gopkg.in/check.v1

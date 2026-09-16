@@ -1,0 +1,274 @@
+{{define "body"}}
+<div class="col-sm-9 col-sm-offset-3 col-md-10 col-md-offset-2 main">
+    <h1 class="page-header">
+        二维码投递
+    </h1>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">一对一消息投递</h3>
+                </div>
+                <div class="panel-body">
+                    <p>
+                        当活动需要通过钉钉、企业微信、短信或其他通道投递时，每个收件人都必须收到唯一链接或唯一二维码。
+                    </p>
+                    <p>
+                        群里共享同一个二维码只能说明“有人扫码”，不能准确归因到个人。要统计到人，每个收件人都需要自己的 <code>rid</code>、链接或二维码。
+                    </p>
+                </div>
+            </div>
+
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">模板变量</h3>
+                </div>
+                <div class="panel-body">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>变量</th>
+                                <th>用途</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>{{"{{"}}.URL{{"}}"}}</code></td>
+                                <td>收件人的专属钓鱼演练页面链接。</td>
+                            </tr>
+                            <tr>
+                                <td><code>{{"{{"}}.QRCodeURL{{"}}"}}</code></td>
+                                <td>本地二维码图片地址，二维码内容是收件人的专属链接。</td>
+                            </tr>
+                            <tr>
+                                <td><code>{{"{{"}}.QRCode{{"}}"}}</code></td>
+                                <td>完整的二维码图片标签。</td>
+                            </tr>
+                            <tr>
+                                <td><code>{{"{{"}}.Tracker{{"}}"}}</code></td>
+                                <td>原有邮件打开跟踪图片。</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <pre><code>&lt;div style="text-align:center;"&gt;
+  &lt;img src="{{"{{"}}.QRCodeURL{{"}}"}}" width="220" height="220" alt="QR Code"&gt;
+&lt;/div&gt;
+{{"{{"}}.Tracker{{"}}"}}</code></pre>
+                </div>
+            </div>
+
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">通道边界</h3>
+                </div>
+                <div class="panel-body">
+                    <ul>
+                        <li>邮件活动可以同时统计邮件打开和二维码扫码访问。</li>
+                        <li>钉钉或企业微信一对一消息可以统计扫码或链接打开。</li>
+                        <li>如果需要个人级归因，钉钉或企业微信群消息不应该复用同一个共享二维码。</li>
+                        <li>安全演练中不要采集密码、验证码、银行卡或政府身份数据。</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">一对一消息助手</h3>
+                </div>
+                <div class="panel-body">
+                    <p>
+                        选择一个活动，根据已有 Gophish 结果生成一对一投递记录。这里会保留活动中使用的相同 <code>rid</code>，因此二维码扫码仍会按正常 Gophish 跟踪流程记录。
+                    </p>
+                    <div class="form-inline" style="margin-bottom: 16px;">
+                        <div class="form-group">
+                            <label for="qrCampaignSelect">活动</label>
+                            <select class="form-control" id="qrCampaignSelect" style="min-width: 260px;"></select>
+                        </div>
+                        <button type="button" class="btn btn-default" id="qrLoadCampaign">
+                            加载活动
+                        </button>
+                        <button type="button" class="btn btn-default" id="qrExportCsv" disabled>
+                            导出 CSV
+                        </button>
+                    </div>
+                    <div class="form-group">
+                        <label for="qrMessageTemplate">消息模板</label>
+                        <textarea class="form-control" id="qrMessageTemplate" rows="5">您好 {name}，请使用你的专属二维码完成本次安全演练：
+
+![二维码]({qr_url})
+
+无法扫码时可打开：{url}</textarea>
+                    </div>
+                    <button type="button" class="btn btn-primary" id="qrGenerateMessages">
+                        生成消息
+                    </button>
+                    <div class="form-group" style="margin-top: 16px;">
+                        <label for="qrMessageOutput">生成的一对一消息</label>
+                        <textarea class="form-control" id="qrMessageOutput" rows="10" readonly></textarea>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped" id="qrDeliveryTable">
+                            <thead>
+                                <tr>
+                                    <th>姓名</th>
+                                    <th>邮箱</th>
+                                    <th>RID</th>
+                                    <th>QR</th>
+                                    <th>钓鱼演练页面链接</th>
+                                    <th>二维码图片地址</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+var qrDeliveryRows = [];
+
+function qrApi(endpoint) {
+    return $.ajax({
+        url: "/api" + endpoint,
+        method: "GET",
+        dataType: "json",
+        beforeSend: function(xhr) {
+            xhr.setRequestHeader("Authorization", "Bearer " + user.api_key);
+        }
+    });
+}
+
+function buildQrDeliveryUrls(baseURL, rid) {
+    var url = new URL(baseURL, window.location.origin);
+    url.searchParams.set("rid", rid);
+    var qr = new URL(url.toString());
+    qr.pathname = qr.pathname.replace(/\/$/, "") + "/qr";
+    return {
+        url: url.toString(),
+        qr_url: qr.toString()
+    };
+}
+
+function csvEscape(value) {
+    value = value || "";
+    if (/[",\n]/.test(value)) {
+        return '"' + value.replace(/"/g, '""') + '"';
+    }
+    return value;
+}
+
+function renderQrDeliveryTable(rows) {
+    var tbody = $("#qrDeliveryTable tbody");
+    tbody.empty();
+    rows.forEach(function(row) {
+        tbody.append(
+            "<tr>" +
+            "<td>" + escapeHtml(row.name) + "</td>" +
+            "<td>" + escapeHtml(row.email) + "</td>" +
+            "<td><code>" + escapeHtml(row.rid) + "</code></td>" +
+            "<td><img src=\"" + escapeHtml(row.qr_url) + "\" alt=\"QR\" style=\"width:88px;height:88px;border:1px solid #ddd;padding:4px;background:#fff;\"></td>" +
+            "<td><code>" + escapeHtml(row.url) + "</code></td>" +
+            "<td><code>" + escapeHtml(row.qr_url) + "</code></td>" +
+            "</tr>"
+        );
+    });
+}
+
+function renderQrMessage(template, row) {
+    return template.replace(/\{([a-zA-Z0-9_]+)\}/g, function(match, key) {
+        return row[key] || "";
+    });
+}
+
+function loadQrCampaigns() {
+    qrApi("/campaigns/").done(function(campaigns) {
+        var select = $("#qrCampaignSelect");
+        select.empty();
+        campaigns.forEach(function(campaign) {
+            select.append(
+                $("<option></option>").attr("value", campaign.id).text(campaign.name)
+            );
+        });
+    }).fail(function() {
+        errorFlash("Unable to load campaigns.");
+    });
+}
+
+function loadQrCampaign(id) {
+    $.when(qrApi("/campaigns/" + id), qrApi("/campaigns/" + id + "/results")).done(function(campaignResp, resultsResp) {
+        var campaign = campaignResp[0];
+        var resultSet = resultsResp[0];
+        qrDeliveryRows = resultSet.results.map(function(result) {
+            var urls = buildQrDeliveryUrls(campaign.url, result.id);
+            var name = $.trim([result.first_name, result.last_name].join(" "));
+            return {
+                name: name || result.email,
+                first_name: result.first_name || "",
+                last_name: result.last_name || "",
+                email: result.email || "",
+                position: result.position || "",
+                rid: result.id,
+                url: urls.url,
+                qr_url: urls.qr_url,
+                status: result.status || ""
+            };
+        });
+        renderQrDeliveryTable(qrDeliveryRows);
+        $("#qrExportCsv").prop("disabled", qrDeliveryRows.length === 0);
+        successFlashFade("Loaded " + qrDeliveryRows.length + " delivery rows.", 2);
+    }).fail(function() {
+        errorFlash("Unable to load campaign delivery rows.");
+    });
+}
+
+function exportQrDeliveryCsv(rows) {
+    var headers = ["name", "first_name", "last_name", "email", "position", "rid", "status", "url", "qr_url"];
+    var lines = [headers.join(",")];
+    rows.forEach(function(row) {
+        lines.push(headers.map(function(header) {
+            return csvEscape(row[header]);
+        }).join(","));
+    });
+    var blob = new Blob([lines.join("\n")], {type: "text/csv;charset=utf-8"});
+    var link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "qr-delivery.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+}
+
+$("#qrGenerateMessages").on("click", function() {
+    var template = $("#qrMessageTemplate").val();
+    var messages = qrDeliveryRows.map(function(row, index) {
+        return "---- " + (index + 1) + ". " + (row.name || row.email || "recipient") + " ----\n" +
+            renderQrMessage(template, row);
+    });
+    $("#qrMessageOutput").val(messages.join("\n\n"));
+});
+
+$("#qrLoadCampaign").on("click", function() {
+    var id = $("#qrCampaignSelect").val();
+    if (!id) {
+        errorFlash("Please select a campaign.");
+        return;
+    }
+    loadQrCampaign(id);
+});
+
+$("#qrExportCsv").on("click", function() {
+    exportQrDeliveryCsv(qrDeliveryRows);
+});
+
+$(document).ready(function() {
+    loadQrCampaigns();
+});
+</script>
+{{end}}

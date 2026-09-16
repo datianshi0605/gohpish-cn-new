@@ -1,0 +1,121 @@
+{{define "body"}}
+<div class="col-sm-9 col-sm-offset-3 col-md-10 col-md-offset-2 main">
+    <h1 class="page-header">
+        钓鱼演练页面
+    </h1>
+    <div id="flashes" class="row"></div>
+    <div class="row">
+        <button type="button" class="btn btn-primary" onclick="edit(-1)" data-toggle="modal" data-backdrop="static"
+            data-target="#modal"><i class="fa fa-plus"></i> 新建钓鱼演练页面</button>
+    </div>
+    &nbsp;
+    <div id="loading">
+        <i class="fa fa-spinner fa-spin fa-4x"></i>
+    </div>
+    <div id="emptyMessage" class="row" style="display:none;">
+        <div class="alert alert-info">
+            还没有钓鱼演练页面，请先创建一个。
+        </div>
+    </div>
+    <div class="row">
+        <table id="pagesTable" class="table" style="display:none;">
+            <thead>
+                <tr>
+                    <th>名称</th>
+                    <th>修改时间</th>
+                    <th class="col-md-2 no-sort"></th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+    </div>
+</div>
+<!-- Modal -->
+<div class="modal fade" id="modal" tabindex="-1" role="dialog" aria-labelledby="modalLabel">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <!-- New Template Modal -->
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close" onclick="dismiss()"><span
+                        aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="modalLabel">新建钓鱼演练页面</h4>
+            </div>
+            <div class="modal-body">
+                <div class="row" id="modal.flashes"></div>
+                <label class="control-label" for="name">名称：</label>
+                <div class="form-group">
+                    <input type="text" class="form-control" placeholder="钓鱼演练页面名称" id="name" autofocus />
+                </div>
+                <div class="form-group">
+                    <button class="btn btn-danger" data-toggle="modal" data-backdrop="static" data-target="#importSiteModal"><i
+                            class="fa fa-globe"></i>
+                        导入站点</button>
+                </div>
+                <!-- Nav tabs -->
+                <ul class="nav nav-tabs" role="tablist">
+                    <li class="active" role="html"><a href="#html" aria-controls="html" role="tab" data-toggle="tab">HTML</a></li>
+                </ul>
+                <!-- Tab panes -->
+                <div class="tab-content">
+                    <div role="tabpanel" class="tab-pane active" id="html">
+                        <textarea id="html_editor"></textarea>
+                    </div>
+                </div>
+                <div class="checkbox checkbox-primary">
+                    <input id="capture_credentials_checkbox" type="checkbox">
+                    <label for="capture_credentials_checkbox">捕获提交数据 <i class="fa fa-question-circle"
+                            data-toggle="tooltip" data-placement="right" title="如果钓鱼演练页面包含表单，将记录提交内容。安全演练中不要采集真实密码、验证码或敏感信息。"></i></label>
+                </div>
+                <div class="checkbox checkbox-primary" id="capture_passwords">
+                    <input id="capture_passwords_checkbox" type="checkbox">
+                    <label for="capture_passwords_checkbox">捕获密码</label>
+                    <div class="alert alert-warning">
+                        <i class="fa fa-exclamation-circle"></i> <b>警告：</b>密码会以明文保存。授权安全演练中不建议采集真实密码。
+                    </div>
+                </div>
+                <div id="redirect_url">
+                    <label class="control-label" for="redirect_url_input">提交后跳转到：<i class="fa fa-question-circle"
+                            data-toggle="tooltip" data-placement="right" title="提交表单后将用户跳转到指定页面。"></i></label>
+                    <div class="form-group">
+                        <input id="redirect_url_input" class="form-control" placeholder="http://example.com" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" data-dismiss="modal" class="btn btn-default" onclick="dismiss()">取消</button>
+                <button type="button" class="btn btn-primary" id="modalSubmit">保存钓鱼演练页面</button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Modal -->
+<div class="modal fade" id="importSiteModal" tabindex="-1" role="dialog" aria-labelledby="importSiteModalLabel">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <!-- New Template Modal -->
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="importSiteModalLabel">Import Site</h4>
+            </div>
+            <div class="modal-body">
+                <div class="row" id="modal.flashes"></div>
+                <label class="control-label" for="url">URL：</label>
+                <div class="form-group">
+                    <input type="text" class="form-control" placeholder="http://google.com" id="url" autofocus />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" data-dismiss="modal" class="btn btn-default">取消</button>
+                <button type="button" class="btn btn-primary" id="modalSubmit" onclick="importSite()">导入</button>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+{{define "scripts"}}
+<script src="/js/src/vendor/ckeditor/ckeditor.js"></script>
+<script src="/js/src/vendor/ckeditor/adapters/jquery.js"></script>
+<script src="/js/dist/app/autocomplete.min.js"></script>
+<script src="/js/src/app/landing_pages.js"></script>
+{{end}}

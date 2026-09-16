@@ -1,0 +1,47 @@
+{{define "nav"}}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-sm-3 col-md-2 sidebar">
+            <ul class="nav nav-sidebar">
+                <li>
+                    <a href="/">仪表盘</a>
+                </li>
+                <li>
+                    <a href="/campaigns">演练活动</a>
+                </li>
+                <li>
+                    <a href="/groups">用户与分组</a>
+                </li>
+                <li> <a href="/templates">邮件模板</a>
+                </li>
+                <li>
+                    <a href="/landing_pages">钓鱼演练页面</a>
+                </li>
+                <li>
+                    <a href="/sending_profiles">发信配置</a>
+                </li>
+                <li>
+                    <a href="/settings">账号设置</a>
+                </li>
+                {{if .ModifySystem}}
+                <li>
+                    <a href="/users">用户管理<span class="nav-badge badge pull-right">Admin</span></a>
+                </li>
+                <li>
+                    <a href="/webhooks">Webhooks<span class="nav-badge badge pull-right">Admin</span></a>
+                </li>
+                {{end}}
+                <li>
+                    <hr>
+                </li>
+                <li>
+                    <a href="https://docs.getgophish.com/user-guide/">使用文档</a>
+                </li>
+                <li>
+                    <a href="https://docs.getgophish.com/api-documentation/">API 文档</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+{{end}}

@@ -1,0 +1,182 @@
+{{define "body"}}
+<div class="col-sm-9 col-sm-offset-3 col-md-10 col-md-offset-2 main">
+    <h1 class="page-header">
+        发信配置
+    </h1>
+    <div id="flashes" class="row"></div>
+    <div class="row">
+        <button type="button" class="btn btn-primary" onclick="edit(-1)" data-toggle="modal" data-backdrop="static"
+            data-target="#modal"><i class="fa fa-plus"></i> 新建发信配置</button>
+    </div>
+    &nbsp;
+    <div id="loading">
+        <i class="fa fa-spinner fa-spin fa-4x"></i>
+    </div>
+    <div id="emptyMessage" class="row" style="display:none;">
+        <div class="alert alert-info">
+            还没有发信配置，请先创建一个。
+        </div>
+    </div>
+    <div class="row">
+        <table id="profileTable" class="table" style="display:none;">
+            <thead>
+                <tr>
+                    <th class="col-md-4">名称</th>
+                    <th>通道类型</th>
+                    <th>修改时间</th>
+                    <th class="col-md-2 no-sort"></th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+    </div>
+</div>
+<!-- Modal -->
+<div class="modal fade" id="modal" tabindex="-1" role="dialog" aria-labelledby="modalLabel">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <!-- New Template Modal -->
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close" onclick="dismiss()"><span
+                        aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="profileModalLabel">新建发信配置</h4>
+            </div>
+            <div class="modal-body">
+                <div class="row" id="modal.flashes"></div>
+                <form>
+                    <div class="form-group">
+                        <label class="control-label" for="name">名称：</label>
+                        <input type="text" class="form-control" placeholder="发信配置名称" id="name" autofocus />
+                        <label class="control-label" for="interface_type">通道类型：</label>
+                        <select class="form-control" id="interface_type">
+                            <option value="SMTP">邮件 SMTP</option>
+                            <option value="DingTalkWorkNotice">钉钉一对一工作通知</option>
+                            <option value="DingTalkRobot" disabled>钉钉群机器人（规划中，不适合个人归因）</option>
+                        </select>
+                        <p class="help-block">
+                            钉钉一对一通道会沿用活动、邮件模板、钓鱼演练页面和团体，不单独维护人员。
+                        </p>
+                        <div id="smtpProfileFields">
+                        <label class="control-label" for="from">SMTP 发件人：<i class="fa fa-question-circle"
+                                data-toggle="tooltip" data-placement="right" title="设置发信邮箱。邮件模板中的信封发件人会展示给用户。"></i></label>
+                        <input type="text" class="form-control" placeholder="First Last <test@example.com>" id="from"
+                            required />
+                        <label class="control-label" for="host">服务器地址：</label>
+                        <input type="text" class="form-control" placeholder="smtp.example.com:25" id="host" required />
+                        <label class="control-label" for="username">用户名：</label>
+                        <input type="text" class="form-control" placeholder="用户名" id="username" />
+                        <label class="control-label" for="password">密码 / 授权码：</label>
+                        <input type="password" class="form-control" placeholder="密码或授权码" id="password" />
+                        <div class="checkbox checkbox-primary">
+                            <input id="ignore_cert_errors" type="checkbox" checked>
+                            <label for="ignore_cert_errors">忽略证书错误 <i class="fa fa-question-circle"
+                                    data-toggle="tooltip" data-placement="right" title="忽略自签名证书等常见证书错误，请谨慎使用。"></i></label>
+                        </div>
+                        </div>
+                        <div id="dingtalkProfileFields" style="display:none;">
+                            <label class="control-label" for="dingtalk_app_key">钉钉 AppKey：</label>
+                            <input type="text" class="form-control" id="dingtalk_app_key" placeholder="企业内部应用 AppKey">
+                            <label class="control-label" for="dingtalk_app_secret">钉钉 AppSecret：</label>
+                            <input type="password" class="form-control" id="dingtalk_app_secret" placeholder="企业内部应用 AppSecret">
+                            <label class="control-label" for="dingtalk_agent_id">钉钉 AgentId：</label>
+                            <input type="text" class="form-control" id="dingtalk_agent_id" placeholder="工作通知 AgentId">
+
+                            <label class="control-label">收件人解析方式：</label>
+                            <div class="radio">
+                                <input type="radio" name="dingtalk_recipient_mode" id="dingtalk_recipient_mode_email" value="email_lookup" checked>
+                                <label for="dingtalk_recipient_mode_email">用 Gophish 人员邮箱在钉钉通讯录发现用户</label>
+                            </div>
+                            <div class="radio">
+                                <input type="radio" name="dingtalk_recipient_mode" id="dingtalk_recipient_mode_mapping" value="mapping">
+                                <label for="dingtalk_recipient_mode_mapping">使用邮箱到钉钉 userId 映射表</label>
+                            </div>
+                            <textarea class="form-control" id="dingtalk_user_mappings" rows="4" placeholder="email,dingtalk_userid&#10;zhangsan@example.com,manager123&#10;lisi@example.com,staff456"></textarea>
+                            <p class="help-block">如果钉钉通讯录里邮箱字段完整，建议选择邮箱发现；如果权限或数据不完整，就使用映射表。</p>
+
+                            <label class="control-label" for="dingtalk_message_template">钉钉消息模板：</label>
+                            <textarea class="form-control" id="dingtalk_message_template" rows="5" placeholder="您好 {{.FirstName}}，请完成本次安全演练信息核验：&#10;&#10;{{.URL}}"></textarea>
+                            <div class="checkbox checkbox-primary">
+                                <input id="dingtalk_include_qr_code" type="checkbox">
+                                <label for="dingtalk_include_qr_code">发送专属二维码图片</label>
+                            </div>
+                            <p class="help-block">第一版可以先发送每个人的专属链接；二维码图片发送需要后续接入钉钉媒体上传流程。</p>
+                        </div>
+                    </div>
+                    <div id="smtpExtraFields">
+                    <fieldset class="form-group">
+                        <label class="control-label input-group">邮件头：</label>
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" name="headerKey" id="headerKey" placeholder="X-Custom-Header">
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" name="headerValue" id="headerValue" placeholder='{{"{{"}}.URL{{"}}"}}-gophish'>
+                        </div>
+                        <div class="col-md-2">
+                            <button id="addCustomHeader" class="btn btn-danger btn-headers" type="button"><i class="fa fa-plus"></i> 添加邮件头</button>
+                        </div>
+                    </fieldset>
+                    <table id="headersTable" class="table table-hover table-striped table-condensed">
+                        <thead>
+                            <tr>
+                                <th>邮件头</th>
+                                <th>值</th>
+                                <th class="no-sort"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                    </table>
+                    <button type="button" data-toggle="modal" data-backdrop="static" data-target="#sendTestEmailModal"
+                        class="btn btn-primary"><i class="fa fa-envelope"></i> 发送测试邮件</button>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" data-dismiss="modal" class="btn btn-default" onclick="dismiss()">取消</button>
+                <button type="button" class="btn btn-primary" id="modalSubmit">保存发信配置</button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Send Test Email Modal -->
+<div class="modal" id="sendTestEmailModal" tabindex="-1" role="dialog" aria-labelledby="modalLabel">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <!-- New Email Modal -->
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="sendTestEmailModalTitle">发送测试邮件</h4>
+            </div>
+            <div class="modal-body">
+                <div class="row" id="sendTestEmailModal.flashes"></div>
+                <div class="row">
+                    <div class="col-sm-12">
+                        <label class="control-label" for="to">发送测试邮件到：</label>
+                    </div>
+                    <br>
+                    <div class="col-sm-2">
+                        <input type="text" class="form-control" placeholder="名" name="to_first_name">
+                    </div>
+                    <div class="col-sm-2">
+                        <input type="text" class="form-control" placeholder="姓" name="to_last_name">
+                    </div>
+                    <div class="col-sm-4">
+                        <input type="email" class="form-control" placeholder="邮箱" name="to_email" required>
+                    </div>
+                    <div class="col-sm-4">
+                        <input type="text" class="form-control" placeholder="职位" name="to_position">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" data-dismiss="modal" class="btn btn-default">取消</button>
+                <button type="button" class="btn btn-primary" id="sendTestModalSubmit" onclick="sendTestEmail()"><i
+                        class="fa fa-envelope"></i> 发送</button>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}} {{define "scripts"}}
+<script src="/js/src/app/sending_profiles.js?v=dingtalk-recipient-mode-1"></script>
+{{end}}
