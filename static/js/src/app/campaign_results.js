@@ -1,3 +1,19 @@
+var campaignLongTermMode;
+function renderCampaignMode(c) {
+    var summary = $("#campaignModeSummary");
+    if (typeof c.long_term === 'boolean') campaignLongTermMode = c.long_term;
+    if (typeof campaignLongTermMode !== 'boolean') { summary.hide(); return; }
+    if (!campaignLongTermMode) {
+        summary.empty().append($('<span>').addClass('label label-default').text(c.status === 'Completed' ? '普通演练 · 已结束' : '普通演练'));
+        summary.append(document.createTextNode(' 使用本次人员名单，用户组后续新增人员不会自动加入。'));
+        summary.show(); return;
+    }
+    var ended = c.status === "Completed";
+    summary.empty().append($('<span>').addClass('label ' + (ended ? 'label-default' : 'label-info')).text(ended ? '长期演练 · 已结束' : '长期演练'));
+    summary.append(document.createTextNode(ended ? ' 已停止自动加入新人员。' : ' 自动跟随已关联用户组 · 后台约每分钟检查新人 · 同一邮箱在本活动中只投递一次'));
+    summary.show();
+}
+
 var map = null
 var doPoll = true;
 
@@ -634,6 +650,7 @@ function poll() {
     api.campaignId.results(campaign.id)
         .success(function (c) {
             campaign = c
+            renderCampaignMode(c)
             /* Update the timeline */
             var timeline_series_data = []
             $.each(campaign.timeline, function (i, event) {
@@ -691,24 +708,42 @@ function poll() {
 
             /* Update the datatable */
             resultsTable = $("#resultsTable").DataTable()
+            var displayedIds = Object.create(null)
+            var resultsById = Object.create(null)
+            $.each(campaign.results, function (i, result) { resultsById[result.id] = result })
             resultsTable.rows().every(function (i, tableLoop, rowLoop) {
                 var row = this.row(i)
                 var rowData = row.data()
                 var rid = rowData[0]
-                $.each(campaign.results, function (j, result) {
-                    if (result.id == rid) {
-                        rowData[8] = moment(result.send_date).format('MMMM Do YYYY, h:mm:ss a')
-                        rowData[7] = result.reported
-                        rowData[6] = result.status
-                        resultsTable.row(i).data(rowData)
-                        if (row.child.isShown()) {
-                            $(row.node()).find("#caret").removeClass("fa-caret-right")
-                            $(row.node()).find("#caret").addClass("fa-caret-down")
-                            row.child(renderTimeline(row.data()))
-                        }
-                        return false
+                displayedIds[rid] = true
+                var result = resultsById[rid]
+                if (result) {
+                    rowData[8] = moment(result.send_date).format('MMMM Do YYYY, h:mm:ss a')
+                    rowData[7] = result.reported
+                    rowData[6] = result.status
+                    resultsTable.row(i).data(rowData)
+                    if (row.child.isShown()) {
+                        $(row.node()).find("#caret").removeClass("fa-caret-right")
+                        $(row.node()).find("#caret").addClass("fa-caret-down")
+                        row.child(renderTimeline(row.data()))
                     }
-                })
+                }
+            })
+            // Long-term campaigns may gain recipients after this page was opened.
+            $.each(campaign.results, function (i, result) {
+                if (displayedIds[result.id]) return
+                resultsTable.row.add([
+                    result.id,
+                    "<i id=\"caret\" class=\"fa fa-caret-right\"></i>",
+                    escapeHtml(result.first_name) || "",
+                    escapeHtml(result.last_name) || "",
+                    escapeHtml(result.email) || "",
+                    escapeHtml(result.position) || "",
+                    result.status,
+                    result.reported,
+                    moment(result.send_date).format('MMMM Do YYYY, h:mm:ss a')
+                ])
+                displayedIds[result.id] = true
             })
             resultsTable.draw(false)
             /* Update the map information */
@@ -731,6 +766,16 @@ function load() {
                 $("#campaignResults").show()
                 // Set the title
                 $("#page-title").text("Results for " + c.name)
+                if (typeof c.long_term === 'boolean') {
+                    renderCampaignMode(c);
+                } else {
+                api.campaignId.get(c.id).success(function (details) {
+                    campaignLongTermMode = !!details.long_term;
+                    renderCampaignMode(campaign);
+                }).error(function () {
+                    $("#campaignModeSummary").text('演练类型暂未读取成功，请刷新页面重试。').show();
+                });
+                }
                 if (c.status == "Completed") {
                     $('#complete_button')[0].disabled = true;
                     $('#complete_button').text('Completed!');

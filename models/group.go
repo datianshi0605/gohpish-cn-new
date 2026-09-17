@@ -245,6 +245,10 @@ func PutGroup(g *Group) error {
 	}
 
 	tx := db.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	defer tx.Rollback()
 	// Check existing targets, removing any that are no longer in the group.
 	for _, t := range ts {
 		if _, ok := cacheNew[t.Email]; ok {
@@ -258,6 +262,7 @@ func PutGroup(g *Group) error {
 			log.WithFields(logrus.Fields{
 				"email": t.Email,
 			}).Error("Error deleting email")
+			return err
 		}
 	}
 	// Add any targets that are not in the database yet.

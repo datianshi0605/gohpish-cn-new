@@ -111,7 +111,10 @@
                             <input type="text" class="form-control" id="send_by_date" autocomplete="random-data"/> <!--Chrome ignores autocomplete="off".-->
                         </div>
                     </div>
-                    <div class="checkbox"><label><input type="checkbox" id="long_term"> 长期演练（自动跟随所选用户组的新成员，手动完成前持续开放）</label></div>
+                    <div class="checkbox checkbox-primary">
+                        <input type="checkbox" id="long_term">
+                        <label for="long_term">长期演练（自动跟随所选用户组的新成员，手动完成前持续开放）</label>
+                    </div>
                     <label class="control-label">投递渠道：</label>
                     <div class="radio">
                         <input type="radio" name="delivery_channel" id="delivery_channel_smtp" value="SMTP" checked>
@@ -186,5 +189,5 @@
     </div>
 </div>
 {{end}} {{define "scripts"}}
-<script src="/js/src/app/campaigns.js?v=delivery-channel-copy-1"></script>
+<script src="/js/src/app/campaigns.js?v=stability-20260917"></script>
 {{end}}

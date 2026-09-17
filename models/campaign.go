@@ -37,11 +37,12 @@ type Campaign struct {
 
 // CampaignResults is a struct representing the results from a campaign
 type CampaignResults struct {
-	Id      int64    `json:"id"`
-	Name    string   `json:"name"`
-	Status  string   `json:"status"`
-	Results []Result `json:"results,omitempty"`
-	Events  []Event  `json:"timeline,omitempty"`
+	LongTerm bool     `json:"long_term"`
+	Id       int64    `json:"id"`
+	Name     string   `json:"name"`
+	Status   string   `json:"status"`
+	Results  []Result `json:"results,omitempty"`
+	Events   []Event  `json:"timeline,omitempty"`
 }
 
 // CampaignSummaries is a struct representing the overview of campaigns
@@ -52,6 +53,7 @@ type CampaignSummaries struct {
 
 // CampaignSummary is a struct representing the overview of a single camaign
 type CampaignSummary struct {
+	LongTerm      bool          `json:"long_term"`
 	Id            int64         `json:"id"`
 	CreatedDate   time.Time     `json:"created_date"`
 	LaunchDate    time.Time     `json:"launch_date"`
@@ -153,7 +155,7 @@ func (c *Campaign) Validate() error {
 // UpdateStatus changes the campaign status appropriately
 func (c *Campaign) UpdateStatus(s string) error {
 	// This could be made simpler, but I think there's a bug in gorm
-	return db.Table("campaigns").Where("id=?", c.Id).Update("status", s).Error
+	return db.Table("campaigns").Where("id=? AND status<>?", c.Id, CampaignComplete).Update("status", s).Error
 }
 
 // AddEvent creates a new campaign event in the database
@@ -266,40 +268,32 @@ func (c *Campaign) generateSendDate(idx int, totalRecipients int) time.Time {
 
 // getCampaignStats returns a CampaignStats object for the campaign with the given campaign ID.
 // It also backfills numbers as appropriate with a running total, so that the values are aggregated.
+// campaignStatsQuery computes all counters in one database pass.
+func campaignStatsQuery(grouped bool) *gorm.DB {
+	prefix := ""
+	if grouped {
+		prefix = "campaign_id, "
+	}
+	return db.Table("results").Select(prefix+`COUNT(*) AS total,
+ COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS submitted_data,
+ COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS clicked_link,
+ COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS opened_email,
+ COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS emails_sent,
+ COALESCE(SUM(CASE WHEN reported = ? THEN 1 ELSE 0 END), 0) AS email_reported,
+ COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS error`,
+		EventDataSubmit, EventClicked, EventOpened, EventSent, true, Error)
+}
+
+func backfillCampaignStats(s *CampaignStats) {
+	s.ClickedLink += s.SubmittedData
+	s.OpenedEmail += s.ClickedLink
+	s.EmailsSent += s.OpenedEmail
+}
+
 func getCampaignStats(cid int64) (CampaignStats, error) {
 	s := CampaignStats{}
-	query := db.Table("results").Where("campaign_id = ?", cid)
-	err := query.Count(&s.Total).Error
-	if err != nil {
-		return s, err
-	}
-	query.Where("status=?", EventDataSubmit).Count(&s.SubmittedData)
-	if err != nil {
-		return s, err
-	}
-	query.Where("status=?", EventClicked).Count(&s.ClickedLink)
-	if err != nil {
-		return s, err
-	}
-	query.Where("reported=?", true).Count(&s.EmailReported)
-	if err != nil {
-		return s, err
-	}
-	// Every submitted data event implies they clicked the link
-	s.ClickedLink += s.SubmittedData
-	err = query.Where("status=?", EventOpened).Count(&s.OpenedEmail).Error
-	if err != nil {
-		return s, err
-	}
-	// Every clicked link event implies they opened the email
-	s.OpenedEmail += s.ClickedLink
-	err = query.Where("status=?", EventSent).Count(&s.EmailsSent).Error
-	if err != nil {
-		return s, err
-	}
-	// Every opened email event implies the email was sent
-	s.EmailsSent += s.OpenedEmail
-	err = query.Where("status=?", Error).Count(&s.Error).Error
+	err := campaignStatsQuery(false).Where("campaign_id = ?", cid).Scan(&s).Error
+	backfillCampaignStats(&s)
 	return s, err
 }
 
@@ -326,19 +320,29 @@ func GetCampaignSummaries(uid int64) (CampaignSummaries, error) {
 	cs := []CampaignSummary{}
 	// Get the basic campaign information
 	query := db.Table("campaigns").Where("user_id = ?", uid)
-	query = query.Select("id, name, created_date, launch_date, send_by_date, completed_date, status")
+	query = query.Select("id, name, created_date, launch_date, send_by_date, completed_date, status, long_term")
 	err := query.Scan(&cs).Error
 	if err != nil {
 		log.Error(err)
 		return overview, err
 	}
+	type statsRow struct {
+		CampaignId int64
+		CampaignStats
+	}
+	var stats []statsRow
+	queryStats := campaignStatsQuery(true)
+	owned := db.Table("campaigns").Select("id").Where("user_id = ?", uid).SubQuery()
+	if err := queryStats.Where("campaign_id IN (?)", owned).Group("campaign_id").Scan(&stats).Error; err != nil {
+		return overview, err
+	}
+	byID := make(map[int64]CampaignStats, len(stats))
+	for _, row := range stats {
+		backfillCampaignStats(&row.CampaignStats)
+		byID[row.CampaignId] = row.CampaignStats
+	}
 	for i := range cs {
-		s, err := getCampaignStats(cs[i].Id)
-		if err != nil {
-			log.Error(err)
-			return overview, err
-		}
-		cs[i].Stats = s
+		cs[i].Stats = byID[cs[i].Id]
 	}
 	overview.Total = int64(len(cs))
 	overview.Campaigns = cs
@@ -349,7 +353,7 @@ func GetCampaignSummaries(uid int64) (CampaignSummaries, error) {
 func GetCampaignSummary(id int64, uid int64) (CampaignSummary, error) {
 	cs := CampaignSummary{}
 	query := db.Table("campaigns").Where("user_id = ? AND id = ?", uid, id)
-	query = query.Select("id, name, created_date, launch_date, send_by_date, completed_date, status")
+	query = query.Select("id, name, created_date, launch_date, send_by_date, completed_date, status, long_term")
 	err := query.Scan(&cs).Error
 	if err != nil {
 		log.Error(err)

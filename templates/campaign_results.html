@@ -6,6 +6,7 @@
     <div style="display:none;" id="campaignResults">
         <div class="row">
             <h1 class="page-header" id="page-title">活动结果</h1>
+            <p id="campaignModeSummary" role="status" style="display:none;margin-top:-10px"></p>
         </div>
         <div class="row">
             <a href="/campaigns" class="btn btn-default">
@@ -40,30 +41,6 @@
             </span>
         </div>
         <br />
-        <div class="panel panel-default" id="longTermPanel">
-            <div class="panel-body">
-                <label><input type="checkbox" id="longTermEnabled"> 长期演练（手动完成前持续开放）</label>
-                <button type="button" class="btn btn-default" id="saveLongTerm">保存设置</button>
-                <div id="appendRecipientsForm" style="display:none;margin-top:12px">
-                    <p>仅向新增人员投递，重复邮箱自动跳过。原有人员、模板、链接及历史记录保持不变。</p>
-                    <label for="autoGroups">自动跟随的用户组（可多选，组名不限）</label>
-                    <select id="autoGroups" class="form-control" multiple size="5"></select>
-                    <p class="help-block">保存后会补入所选组中尚未参与本活动的人员，此后约每分钟检查新人并自动按原配置投递。组名修改不影响关联；跨组重复人员只加入一次。</p>
-                    <button type="button" id="saveAutoGroups" class="btn btn-primary" disabled>保存关联组并开启自动加入</button>
-                    <p id="autoGroupsFeedback" role="status"></p>
-                    <hr>
-                    <h4>手动追加（可选）</h4>
-                    <label for="appendGroup">从用户组追加（可选，可先在用户组中导入 CSV）</label>
-                    <select id="appendGroup" class="form-control"><option value="">不选择用户组</option></select>
-                    <label for="appendPeople">手动添加：每行一个邮箱，或从表格粘贴“邮箱、姓名、职位”三列（制表符分隔）</label>
-                    <textarea id="appendPeople" class="form-control" rows="4"></textarea>
-                    <label for="appendSendDate">新增人员投递时间（留空则尽快投递）</label>
-                    <input id="appendSendDate" type="datetime-local" class="form-control">
-                    <button type="button" id="appendPeopleButton" class="btn btn-primary" style="margin-top:10px">追加人员并按计划投递</button>
-                </div>
-                <p id="appendFeedback" role="status"></p>
-            </div>
-        </div>
         <div class="row">
             <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
                 <div class="row">
@@ -111,6 +88,5 @@
     <div id="flashes" class="row"></div>
 </div>
 {{end}} {{define "scripts"}}
-<script src="/js/dist/app/campaign_results.min.js"></script>
-<script src="/js/src/app/campaign_longterm.js"></script>
+<script src="/js/dist/app/campaign_results.min.js?v=stability-20260917"></script>
 {{end}}

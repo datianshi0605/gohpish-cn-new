@@ -46,3 +46,7 @@ cp config.example.json config.json
 ```
 
 上游说明见 [Gophish README](docs/README_UPSTREAM.md)，许可证见 [LICENSE](LICENSE)。
+
+## 2026-09-17 内部稳定性优化
+
+普通/长期演练均增加只读标识。修复队列并发领取、批次资源上限、异常释放及发件人查询缓存；合并列表统计查询并优化千人结果刷新。详情和验证边界见 [稳定性检查报告](docs/STABILITY_REVIEW_20260917_CN.md)。这部分修改包含 Go 后端，需重新构建程序才能生效。

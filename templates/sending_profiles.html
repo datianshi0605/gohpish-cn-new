@@ -95,7 +95,7 @@
                             <p class="help-block">如果钉钉通讯录里邮箱字段完整，建议选择邮箱发现；如果权限或数据不完整，就使用映射表。</p>
 
                             <label class="control-label" for="dingtalk_message_template">钉钉消息模板：</label>
-                            <textarea class="form-control" id="dingtalk_message_template" rows="5" placeholder="您好 {{.FirstName}}，请完成本次安全演练信息核验：&#10;&#10;{{.URL}}"></textarea>
+                            <textarea class="form-control" id="dingtalk_message_template" rows="5" placeholder="您好 {{"{{.FirstName}}"}}，请完成本次安全演练信息核验：&#10;&#10;{{"{{.URL}}"}}"></textarea>
                             <div class="checkbox checkbox-primary">
                                 <input id="dingtalk_include_qr_code" type="checkbox">
                                 <label for="dingtalk_include_qr_code">发送专属二维码图片</label>

@@ -2,6 +2,7 @@ package mailer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/textproto"
@@ -61,6 +62,8 @@ type Mail interface {
 // MailWorker is the worker that receives slices of emails
 // on a channel to send. It's assumed that every slice of emails received is meant
 // to be sent to the same server.
+const maxConcurrentBatches = 8
+
 type MailWorker struct {
 	queue chan []Mail
 }
@@ -76,12 +79,22 @@ func NewMailWorker() *MailWorker {
 // Start launches the mail worker to begin listening on the Queue channel
 // for new slices of Mail instances to process.
 func (mw *MailWorker) Start(ctx context.Context) {
+	slots := make(chan struct{}, maxConcurrentBatches)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case ms := <-mw.queue:
+			if len(ms) == 0 {
+				continue
+			}
+			select {
+			case slots <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
 			go func(ctx context.Context, ms []Mail) {
+				defer func() { <-slots }()
 				dialer, err := ms[0].GetDialer()
 				if err != nil {
 					errorMail(err, ms)
@@ -95,6 +108,9 @@ func (mw *MailWorker) Start(ctx context.Context) {
 
 // Queue sends the provided mail to the internal queue for processing.
 func (mw *MailWorker) Queue(ms []Mail) {
+	if len(ms) == 0 {
+		return
+	}
 	mw.queue <- ms
 }
 
@@ -116,11 +132,14 @@ func dialHost(ctx context.Context, dialer Dialer) (Sender, error) {
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, nil
+			return nil, ctx.Err()
 		default:
 			break
 		}
 		sender, err = dialer.Dial()
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
 		if err == nil {
 			break
 		}
@@ -139,13 +158,23 @@ func dialHost(ctx context.Context, dialer Dialer) (Sender, error) {
 // If the context is cancelled before all of the mail are sent,
 // sendMail just returns and does not modify those emails.
 func sendMail(ctx context.Context, dialer Dialer, ms []Mail) {
+	if len(ms) == 0 {
+		return
+	}
 	sender, err := dialHost(ctx, dialer)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return
+		}
 		log.Warn(err)
 		errorMail(err, ms)
 		return
 	}
-	defer sender.Close()
+	defer func() {
+		if sender != nil {
+			sender.Close()
+		}
+	}()
 	message := gomail.NewMessage()
 	for i, m := range ms {
 		select {
@@ -153,6 +182,16 @@ func sendMail(ctx context.Context, dialer Dialer, ms []Mail) {
 			return
 		default:
 			break
+		}
+		if guard, ok := m.(interface{ ShouldSend() (bool, error) }); ok {
+			allowed, guardErr := guard.ShouldSend()
+			if guardErr != nil {
+				m.Backoff(guardErr)
+				continue
+			}
+			if !allowed {
+				continue
+			}
 		}
 		message.Reset()
 		err = m.Generate(message)
@@ -213,8 +252,13 @@ func sendMail(ctx context.Context, dialer Dialer, ms []Mail) {
 					"email": message.GetHeader("To")[0],
 				}).Warn(err)
 				origErr := err
+				sender.Close()
+				sender = nil
 				sender, err = dialHost(ctx, dialer)
 				if err != nil {
+					if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+						return
+					}
 					errorMail(err, ms[i:])
 					break
 				}

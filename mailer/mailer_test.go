@@ -217,65 +217,31 @@ func TestPermError(t *testing.T) {
 }
 
 func TestUnknownError(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	mw := NewMailWorker()
-	go func(ctx context.Context) {
-		mw.Start(ctx)
-	}(ctx)
-
-	expectedError := errors.New("Unexpected error")
-
-	sender := newMockErrorSender(expectedError)
+	expected := errors.New("connection dropped")
+	first := newMockSender()
+	first.setSend(func(*mockMessage) error { return expected })
+	second := newMockSender()
+	second.messageChan = make(chan *mockMessage, 2)
 	dialer := newMockDialer()
 	dialer.setDial(func() (Sender, error) {
-		return sender, nil
+		if dialer.dialCount == 1 {
+			return first, nil
+		}
+		return second, nil
 	})
-
 	messages := generateMessages(dialer)
-
-	// Send the campaign
-	mw.Queue(messages)
-
-	got := []*mockMessage{}
-
-	for message := range sender.messageChan {
-		got = append(got, message)
+	sendMail(context.Background(), dialer, messages)
+	if first.status != "closed" || second.status != "closed" {
+		t.Fatal("both original and replacement connections must close")
 	}
-	// Check that we only sent one message
-	expectedCount := 1
-	if len(got) != expectedCount {
-		t.Fatalf("Unexpected number of messages received. Expected %d Got %d", len(got), expectedCount)
+	if dialer.dialCount != 2 {
+		t.Fatalf("expected reconnect, got %d dials", dialer.dialCount)
 	}
-
-	// Check that it's the correct message
-	originalFrom := messages[1].(*mockMessage).from
-	if got[0].from != originalFrom {
-		t.Fatalf("Invalid message received. Expected %s, Got %s", originalFrom, got[0].from)
+	if messages[0].(*mockMessage).backoffCount != 1 {
+		t.Fatal("failed message must back off")
 	}
-
-	message := messages[0].(*mockMessage)
-
-	// If we get an unexpected error, this means that it's likely the
-	// underlying connection dropped. When this happens, we expect the
-	// connection to be re-established (see #997).
-	// In this case, we're successfully reestablishing the connection
-	// so we expect the backoff to occur.
-	expectedBackoffCount := 1
-	backoffCount := message.backoffCount
-	if backoffCount != expectedBackoffCount {
-		t.Fatalf("Did not receive expected backoff. Got backoffCount %d, Expected %d", backoffCount, expectedBackoffCount)
-	}
-
-	// Check that the underlying connection was reestablished
-	expectedDialCount := 2
-	if dialer.dialCount != expectedDialCount {
-		t.Fatalf("Did not receive expected dial count. Got %d expected %d", dialer.dialCount, expectedDialCount)
-	}
-
-	// Check that the email errored out appropriately
-	if !reflect.DeepEqual(message.err, expectedError) {
-		t.Fatalf("Did not received expected error. Got %#v\nExpected %#v", message.err, expectedError)
+	got := <-second.messageChan
+	if got == nil || got.from != messages[1].(*mockMessage).from {
+		t.Fatal("remaining message must use new connection")
 	}
 }

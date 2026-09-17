@@ -10,6 +10,7 @@ import (
 	"net/mail"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -66,7 +67,9 @@ func (m *MailLog) Backoff(reason error) error {
 		return err
 	}
 	if m.SendAttempt == MaxSendAttempts {
-		r.HandleEmailError(ErrMaxSendAttempts)
+		if err := m.Error(ErrMaxSendAttempts); err != nil {
+			return err
+		}
 		return ErrMaxSendAttempts
 	}
 	// Add an error, since we had to backoff because of a
@@ -74,9 +77,12 @@ func (m *MailLog) Backoff(reason error) error {
 	m.SendAttempt++
 	backoffDuration := math.Pow(2, float64(m.SendAttempt))
 	m.SendDate = m.SendDate.Add(time.Minute * time.Duration(backoffDuration))
-	err = db.Save(m).Error
-	if err != nil {
-		return err
+	updated := db.Model(&MailLog{}).Where("id=?", m.Id).Updates(map[string]interface{}{"send_attempt": m.SendAttempt, "send_date": m.SendDate})
+	if updated.Error != nil {
+		return updated.Error
+	}
+	if updated.RowsAffected == 0 {
+		return nil
 	}
 	err = r.HandleEmailBackoff(reason, m.SendDate)
 	if err != nil {
@@ -89,13 +95,13 @@ func (m *MailLog) Backoff(reason error) error {
 // Unlock removes the processing flag so the maillog can be processed again
 func (m *MailLog) Unlock() error {
 	m.Processing = false
-	return db.Save(&m).Error
+	return db.Model(&MailLog{}).Where("id=?", m.Id).UpdateColumn("processing", m.Processing).Error
 }
 
 // Lock sets the processing flag so that other processes cannot modify the maillog
 func (m *MailLog) Lock() error {
 	m.Processing = true
-	return db.Save(&m).Error
+	return db.Model(&MailLog{}).Where("id=?", m.Id).UpdateColumn("processing", m.Processing).Error
 }
 
 // Error sets the error status on the models.Result that the
@@ -155,13 +161,28 @@ func (m *MailLog) CacheCampaign(campaign *Campaign) error {
 }
 
 func (m *MailLog) GetSmtpFrom() (string, error) {
-	c, err := GetCampaign(m.CampaignId, m.UserId)
+	c := m.cachedCampaign
+	if c == nil {
+		campaign, err := GetCampaignMailContext(m.CampaignId, m.UserId)
+		if err != nil {
+			return "", err
+		}
+		c = &campaign
+	}
+	f, err := mail.ParseAddress(c.SMTP.FromAddress)
 	if err != nil {
 		return "", err
 	}
+	return f.Address, nil
+}
 
-	f, err := mail.ParseAddress(c.SMTP.FromAddress)
-	return f.Address, err
+// ShouldSend checks that a queued message still belongs to an active campaign.
+// An SMTP transaction already in flight cannot be recalled by this check.
+func (m *MailLog) ShouldSend() (bool, error) {
+	var count int64
+	err := db.Table("mail_logs").Joins("JOIN campaigns ON campaigns.id = mail_logs.campaign_id").
+		Where("mail_logs.id=? AND mail_logs.processing=? AND campaigns.status<>?", m.Id, true, CampaignComplete).Count(&count).Error
+	return count > 0, err
 }
 
 // Generate fills in the details of a gomail.Message instance with
@@ -284,16 +305,51 @@ func GetMailLogsByCampaign(cid int64) ([]*MailLog, error) {
 // LockMailLogs locks or unlocks a slice of maillogs for processing.
 func LockMailLogs(ms []*MailLog, lock bool) error {
 	tx := db.Begin()
-	for i := range ms {
-		ms[i].Processing = lock
-		err := tx.Save(ms[i]).Error
-		if err != nil {
-			tx.Rollback()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	defer tx.Rollback()
+	for _, m := range ms {
+		if err := tx.Model(&MailLog{}).Where("id=?", m.Id).UpdateColumn("processing", lock).Error; err != nil {
 			return err
 		}
 	}
-	tx.Commit()
+	if err := tx.Commit().Error; err != nil {
+		return err
+	}
+	for _, m := range ms {
+		m.Processing = lock
+	}
 	return nil
+}
+
+// ClaimMailLogs atomically claims only records still waiting in the database.
+// Conditional updates prevent concurrent workers from sending the same record.
+func ClaimMailLogs(candidates []*MailLog) ([]*MailLog, error) {
+	tx := db.Begin()
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+	defer tx.Rollback()
+	claimed := []*MailLog{}
+	ordered := append([]*MailLog(nil), candidates...)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Id < ordered[j].Id })
+	for _, m := range ordered {
+		result := tx.Model(&MailLog{}).Where("id=? AND processing=? AND send_date<=?", m.Id, false, time.Now().UTC()).UpdateColumn("processing", true)
+		if result.Error != nil {
+			return nil, result.Error
+		}
+		if result.RowsAffected == 1 {
+			claimed = append(claimed, m)
+		}
+	}
+	if err := tx.Commit().Error; err != nil {
+		return nil, err
+	}
+	for _, m := range claimed {
+		m.Processing = true
+	}
+	return claimed, nil
 }
 
 // UnlockAllMailLogs removes the processing lock for all maillogs

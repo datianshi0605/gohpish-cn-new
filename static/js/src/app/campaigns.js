@@ -1,3 +1,13 @@
+function campaignModeName(c) {
+    var name = escapeHtml(c.name);
+    if (typeof c.long_term !== 'boolean') return name;
+    if (!c.long_term) return name + ' <span class="label label-default" title="仅面向本次人员名单，组内新人不会自动加入">普通演练' + (c.status === 'Completed' ? ' · 已结束' : '') + '</span>';
+    var ended = c.status === 'Completed';
+    return name + ' <span class="label ' + (ended ? 'label-default' : 'label-info') + '" title="' +
+        (ended ? '已结束，停止自动加入新人' : '自动跟随已关联用户组，后台约每分钟检查新人；同一邮箱在本活动中只投递一次') + '">' +
+        (ended ? '长期演练 · 已结束' : '长期演练') + '</span>';
+}
+
 // labels is a map of campaign statuses to
 // CSS classes
 var labels = {
@@ -416,7 +426,7 @@ $(document).ready(function () {
                     }
 
                     var row = [
-                        escapeHtml(campaign.name),
+                        campaignModeName(campaign),
                         moment(campaign.created_date).format('MMMM Do YYYY, h:mm:ss a'),
                         "<span class=\"label " + label + "\" data-toggle=\"tooltip\" data-placement=\"right\" data-html=\"true\" title=\"" + quickStats + "\">" + campaign.status + "</span>",
                         "<div class='pull-right'><a class='btn btn-primary' href='/campaigns/" + campaign.id + "' data-toggle='tooltip' data-placement='left' title='查看结果'>\
@@ -437,6 +447,27 @@ $(document).ready(function () {
                 })
                 activeCampaignsTable.rows.add(rows['active']).draw()
                 archivedCampaignsTable.rows.add(rows['archived']).draw()
+                // Older servers omit long_term from summaries; retain compatibility.
+                // Read full campaign metadata once, without changing any settings.
+                if (campaigns.some(function (c) { return typeof c.long_term !== 'boolean'; })) {
+                api.campaigns.get().success(function (details) {
+                    var byId = Object.create(null);
+                    details.forEach(function (c) { byId[c.id] = c; });
+                    [activeCampaignsTable, archivedCampaignsTable].forEach(function (table) {
+                        table.rows().every(function () {
+                            var data = this.data();
+                            var match = data[3].match(/href=['"]\/campaigns\/(\d+)['"]/);
+                            if (match && byId[match[1]]) {
+                                data[0] = campaignModeName(byId[match[1]]);
+                                this.data(data);
+                            }
+                        });
+                        table.draw(false);
+                    });
+                }).error(function () {
+                    errorFlash('演练类型标识暂未读取成功，请刷新页面重试。');
+                });
+                }
                 $('[data-toggle="tooltip"]').tooltip()
             } else {
                 $("#emptyMessage").show()

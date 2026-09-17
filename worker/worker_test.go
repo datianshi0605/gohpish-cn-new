@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -209,5 +210,149 @@ func TestAutomaticGroupRecipientsReachWorker(t *testing.T) {
 	logs, err := models.GetMailLogsByCampaign(campaign.Id)
 	if err != nil || len(logs) != 11 {
 		t.Fatal("repeat synchronization duplicated mail logs", len(logs), err)
+	}
+}
+
+func TestConcurrentWorkerClaimsDoNotDuplicate(t *testing.T) {
+	setupTest(t)
+	c, err := setupCampaign(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ms, err := models.GetMailLogsByCampaign(c.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = models.LockMailLogs(ms, false); err != nil {
+		t.Fatal(err)
+	}
+	lm := &logMailer{queue: make(chan []mailer.Mail, 16)}
+	var wg sync.WaitGroup
+	errors := make(chan error, 8)
+	gate := make(chan struct{})
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-gate
+			w := &DefaultWorker{mailer: lm}
+			errors <- w.processCampaigns(time.Now())
+		}()
+	}
+	close(gate)
+	wg.Wait()
+	close(errors)
+	for err := range errors {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	seen := map[string]bool{}
+	deadline := time.After(2 * time.Second)
+	for len(seen) < 10 {
+		select {
+		case batch := <-lm.queue:
+			for _, mail := range batch {
+				id := mail.(*models.MailLog).RId
+				if seen[id] {
+					t.Fatal("duplicate mail queued")
+				}
+				seen[id] = true
+			}
+		case <-deadline:
+			t.Fatal("missing mail")
+		}
+	}
+	select {
+	case <-lm.queue:
+		t.Fatal("unexpected duplicate batch")
+	case <-time.After(20 * time.Millisecond):
+	}
+}
+
+func TestImmediateLaunchDoesNotTakeAutoAppendedMail(t *testing.T) {
+	setupTest(t)
+	c, err := setupCampaign(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = models.SetCampaignLongTerm(c.Id, 1, true); err != nil {
+		t.Fatal(err)
+	}
+	_, err = models.AppendCampaignRecipients(c.Id, 1, models.AppendRecipientsRequest{Targets: []models.BaseRecipient{{Email: "later-added@example.com"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lm := &logMailer{queue: make(chan []mailer.Mail, 4)}
+	w := &DefaultWorker{mailer: lm}
+	w.LaunchCampaign(*c)
+	batch := <-lm.queue
+	if len(batch) != 10 {
+		t.Fatalf("launch took appended mail: %d", len(batch))
+	}
+	if err = w.processCampaigns(time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case batch = <-lm.queue:
+		if len(batch) != 1 {
+			t.Fatal("append was duplicated or lost")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("append not queued")
+	}
+}
+
+func TestBrokenCampaignDoesNotLockOtherCampaigns(t *testing.T) {
+	setupTest(t)
+	bad, err := setupCampaign(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := models.Template{Name: "Healthy Template", UserId: 1, Subject: "test", Text: "test"}
+	if err = models.PostTemplate(&template); err != nil {
+		t.Fatal(err)
+	}
+	good := *bad
+	good.Id = 0
+	good.Name = "Healthy campaign"
+	good.Template = template
+	good.Results = nil
+	if err = models.PostCampaign(&good, 1); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []int64{bad.Id, good.Id} {
+		ms, e := models.GetMailLogsByCampaign(id)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = models.LockMailLogs(ms, false); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if err = models.DeleteTemplate(bad.Template.Id, 1); err != nil {
+		t.Fatal(err)
+	}
+	lm := &logMailer{queue: make(chan []mailer.Mail, 2)}
+	w := &DefaultWorker{mailer: lm}
+	if err = w.processCampaigns(time.Now()); err == nil {
+		t.Fatal("missing template must return an error")
+	}
+	select {
+	case batch := <-lm.queue:
+		if len(batch) != 10 || batch[0].(*models.MailLog).CampaignId != good.Id {
+			t.Fatal("healthy campaign was not queued")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("healthy campaign blocked")
+	}
+	ms, err := models.GetMailLogsByCampaign(bad.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range ms {
+		if m.Processing {
+			t.Fatal("broken campaign remains permanently locked")
+		}
 	}
 }

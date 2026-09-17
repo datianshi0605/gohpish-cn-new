@@ -103,7 +103,7 @@ func AppendCampaignRecipients(id, uid int64, req AppendRecipientsRequest) (Appen
 		sendDate = c.LaunchDate
 	}
 	var existing []Result
-	if err := tx.Where("campaign_id=?", id).Find(&existing).Error; err != nil {
+	if err := tx.Select("email").Where("campaign_id=?", id).Find(&existing).Error; err != nil {
 		return out, err
 	}
 	seen := make(map[string]bool)

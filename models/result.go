@@ -203,6 +203,9 @@ func (r *Result) GenerateId(tx *gorm.DB) error {
 		if err == gorm.ErrRecordNotFound {
 			break
 		}
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
